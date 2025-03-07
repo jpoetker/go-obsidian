@@ -1,0 +1,15 @@
+---
+description: Writing code in go lang
+globs: *.go
+alwaysApply: false
+---
+For Go code:
+- Follow Go's standard naming conventions: camelCase for variables, PascalCase for exported functions
+- Respect Go's error handling patterns by returning errors rather than using exceptions
+- Keep functions small and focused with single responsibility
+- Organize functions within packages based on related functionality
+- Use context.Context as the first parameter for API calls and long-running operations
+- Prefer composition over inheritance when designing interfaces
+- Use meaningful variable names, not single letters (except in simple loops)
+
+@file .golangci.yml
