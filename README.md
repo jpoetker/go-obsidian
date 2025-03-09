@@ -17,14 +17,11 @@ First, make sure you have the [Local REST API](https://github.com/coddingtonbear
 ```go
 import "github.com/jpoetker/go-obsidian"
 
-client := obsidian.NewClient("your-api-key")
-
-// Optionally, configure the client with options
-client = obsidian.NewClient(
-    "your-api-key",
-    obsidian.WithBaseURL("https://custom-host:27124"),
-    obsidian.WithHTTPClient(customHTTPClient),
-)
+// Create a client with responses (recommended)
+client, err := obsidian.NewAuthenticedClientWithResponses("http://localhost:27124", "your-api-key")
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
 ### Checking Server Status
@@ -33,14 +30,18 @@ client = obsidian.NewClient(
 ctx := context.Background()
 
 // Get server status and authentication status
-status, err := client.Status.GetStatus(ctx)
+response, err := client.GetWithResponse(ctx)
 if err != nil {
     log.Fatal(err)
 }
 
-fmt.Printf("Server: %s\n", status.Service)
-fmt.Printf("Authenticated: %v\n", status.Authenticated)
-fmt.Printf("Obsidian Version: %s\n", status.Versions.Obsidian)
+if response.JSON200 != nil {
+    fmt.Printf("Service: %s\n", *response.JSON200.Service)
+    fmt.Printf("Authenticated: %v\n", *response.JSON200.Authenticated)
+    if response.JSON200.Versions != nil {
+        fmt.Printf("Obsidian Version: %s\n", *response.JSON200.Versions.Obsidian)
+    }
+}
 ```
 
 ### Working with Vault Files
@@ -49,69 +50,50 @@ fmt.Printf("Obsidian Version: %s\n", status.Versions.Obsidian)
 ctx := context.Background()
 
 // List files in a directory
-files, err := client.Vault.ListDirectory(ctx, "path/to/directory")
+response, err := client.GetVaultPathToDirectoryWithResponse(ctx, "path/to/directory")
 if err != nil {
     log.Fatal(err)
 }
+if response.JSON200 != nil {
+    for _, file := range *response.JSON200.Files {
+        fmt.Println(file)
+    }
+}
 
 // Get file content
-note, err := client.Vault.GetFile(ctx, "path/to/note.md")
+fileResponse, err := client.GetVaultFilenameWithResponse(ctx, "path/to/note.md")
 if err != nil {
     log.Fatal(err)
 }
 
 // Create or update a file
-err = client.Vault.CreateOrUpdateFile(ctx, "new-note.md", "# My New Note\n\nContent here")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Append to a file
-err = client.Vault.AppendToFile(ctx, "existing-note.md", "\n\nAppended content")
+content := strings.NewReader("# My New Note\n\nContent here")
+_, err = client.PutVaultFilenameWithBodyWithResponse(ctx, "new-note.md", "text/markdown", content)
 if err != nil {
     log.Fatal(err)
 }
 
 // Delete a file
-err = client.Vault.DeleteFile(ctx, "note-to-delete.md")
+_, err = client.DeleteVaultFilenameWithResponse(ctx, "note-to-delete.md")
 if err != nil {
     log.Fatal(err)
 }
 ```
 
-### Searching
+### Working with Active Note
 
 ```go
-// Simple text search
-results, err := client.Search.SimpleSearch(ctx, "search query", &obsidian.SimpleSearchOptions{
-    ContextLength: 100,
-})
+ctx := context.Background()
+
+// Get active note
+activeResponse, err := client.GetActiveWithResponse(ctx)
 if err != nil {
     log.Fatal(err)
 }
 
-// Advanced search using DQL
-dqlResults, err := client.Search.Search(ctx, obsidian.SearchQuery{
-    Query:     "TABLE time-played FROM #game SORT rating DESC",
-    QueryType: "dql",
-})
-if err != nil {
-    log.Fatal(err)
-}
-
-// Advanced search using JsonLogic
-jsonLogicQuery := map[string]interface{}{
-    "in": []interface{}{
-        "myTag",
-        map[string]interface{}{
-            "var": "tags",
-        },
-    },
-}
-jsonLogicResults, err := client.Search.Search(ctx, obsidian.SearchQuery{
-    Query:     jsonLogicQuery,
-    QueryType: "jsonlogic",
-})
+// Update active note
+content := strings.NewReader("# Updated Content")
+_, err = client.PutActiveWithBodyWithResponse(ctx, "text/markdown", content)
 if err != nil {
     log.Fatal(err)
 }
@@ -120,14 +102,21 @@ if err != nil {
 ### Working with Commands
 
 ```go
+ctx := context.Background()
+
 // List available commands
-commands, err := client.Commands.List(ctx)
+commandsResponse, err := client.GetCommandsWithResponse(ctx)
 if err != nil {
     log.Fatal(err)
 }
+if commandsResponse.JSON200 != nil && commandsResponse.JSON200.Commands != nil {
+    for _, cmd := range *commandsResponse.JSON200.Commands {
+        fmt.Printf("Command: %s (ID: %s)\n", *cmd.Name, *cmd.Id)
+    }
+}
 
 // Execute a command
-err = client.Commands.Execute(ctx, "graph:open")
+_, err = client.PostCommandsCommandIdWithResponse(ctx, "graph:open")
 if err != nil {
     log.Fatal(err)
 }
@@ -136,12 +125,12 @@ if err != nil {
 ## Features
 
 - Full support for Obsidian's Local REST API
-- Vault file operations (create, read, update, delete, append)
-- Simple and advanced search capabilities
-- Command execution
-- Context support for cancellation and timeouts
-- Configurable client with custom HTTP client and base URL
 - Type-safe API with proper error handling
+- Context support for cancellation and timeouts
+- Vault file operations (create, read, update, delete)
+- Active note management
+- Command execution
+- Configurable client with custom HTTP client and base URL options
 
 ## Contributing
 
